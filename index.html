@@ -599,8 +599,35 @@ function s(id,v){const e=document.getElementById(id);if(e)e.textContent=v;}
 function sw(id,v){const e=document.getElementById(id);if(e)e.style.width=v+'%';}
 
 function ctx(){
-  const t=tot(gm()),b=brn(gw());
-  return `Stats: ${G.weight}lbs, ${G.cBf}% BF (goal:${G.gBf}%, start:${G.sBf}%). Targets: ${G.cal}cal/${G.pro}g P/${G.carb}g C/${G.fat}g F. Today: ${Math.round(t.cal)}cal eaten, ${Math.round(t.pro)}g P, ${Math.round(t.carb)}g C, ${Math.round(t.fat)}g F. Burned:${Math.round(b)}cal. Net:${Math.round(t.cal-b)}cal. Remaining:${Math.max(0,G.cal-t.cal)}cal, ${Math.max(0,G.pro-t.pro)}g P, ${Math.max(0,G.carb-t.carb)}g C, ${Math.max(0,G.fat-t.fat)}g F. Workouts:${gw().length?gw().map(w=>w.name).join(', '):'none'}.`;
+  const t=tot(gm()),aiB=brn(gw());
+  // Include gym tracker calories for today
+  let gymB=0;
+  try{
+    const gymLog=localStorage.getItem('gym-log');
+    if(gymLog){
+      const log=JSON.parse(gymLog);
+      const todayStr=td();
+      gymB=log.filter(s=>s.date===todayStr).reduce((a,s)=>a+(s.calories||0),0);
+    }
+  }catch(e){}
+  const b=aiB+gymB;
+  const net=t.cal-b;
+  // Build meal list for coach
+  const mealList=gm().length?gm().map(m=>`${m.name} (${m.cal}cal, ${m.pro}g P, ${m.carb}g C, ${m.fat}g F${m.time?' @ '+m.time:''})`).join(' | '):'nothing logged yet';
+  // Build workout list including gym tracker
+  let workoutList=gw().length?gw().map(w=>w.name).join(', '):'';
+  try{
+    const gymLog=localStorage.getItem('gym-log');
+    if(gymLog){
+      const log=JSON.parse(gymLog);
+      const todaySessions=log.filter(s=>s.date===td());
+      if(todaySessions.length){
+        const gymNames=todaySessions.map(s=>s.workoutName+(s.calories?' ('+s.calories+(s.caloriesSource==='apple_watch'?' kcal ⌚':' kcal est.')+')':'')).join(', ');
+        workoutList=workoutList?workoutList+', '+gymNames:gymNames;
+      }
+    }
+  }catch(e){}
+  return `Stats: ${G.weight}lbs, ${G.cBf}% BF (goal:${G.gBf}%, start:${G.sBf}%). Targets: ${G.cal}cal/${G.pro}g P/${G.carb}g C/${G.fat}g F. Today eaten: ${Math.round(t.cal)}cal, ${Math.round(t.pro)}g P, ${Math.round(t.carb)}g C, ${Math.round(t.fat)}g F. Burned:${Math.round(b)}cal${gymB?' (includes '+Math.round(gymB)+' from gym tracker)':''}. Net:${Math.round(net)}cal. Remaining:${Math.max(0,G.cal-t.cal)}cal, ${Math.max(0,G.pro-t.pro)}g P, ${Math.max(0,G.carb-t.carb)}g C, ${Math.max(0,G.fat-t.fat)}g F. Meals today: ${mealList}. Workouts today: ${workoutList||'none'}.`;
 }
 
 // IMAGE HANDLING
