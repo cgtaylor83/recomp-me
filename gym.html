@@ -409,12 +409,14 @@ function renderHome(){
     recent.forEach(s=>{
       const totalSets=s.exercises.reduce((a,e)=>a+(e.sets.filter(st=>st.done).length),0);
       const totalVol=s.exercises.reduce((a,e)=>a+e.sets.filter(st=>st.done&&st.weight).reduce((b,st)=>b+(parseFloat(st.weight)||0)*(parseInt(st.reps)||0),0),0);
+      const calDisplay=s.calories?(s.caloriesSource==='apple_watch'?'⌚ '+s.calories+' cal':s.calories+' cal est.'):'';
+      const hrDisplay=s.hrAvg?` · ❤️ ${s.hrAvg}/${s.hrMax||'?'} bpm`:'';
       html+=`<div class="day-card" onclick="viewSession('${s.id}')">
         <div class="day-card-header">
           <div class="day-name">${s.workoutName}</div>
           <div style="font-size:11px;color:var(--text3);font-family:var(--mono);">${new Date(s.date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div>
         </div>
-        <div class="day-meta">${totalSets} sets · ${totalVol>0?Math.round(totalVol).toLocaleString()+' lbs total vol':s.exercises.length+' exercises'}</div>
+        <div class="day-meta">${totalSets} sets · ${calDisplay}${hrDisplay}${!calDisplay?' · '+s.exercises.length+' exercises':''}</div>
       </div>`;
     });
   }
@@ -468,8 +470,13 @@ function renderWorkout(){
     const doneSets=ex.sets.filter(s=>s.done).length;
     html+=`<div class="exercise-card">
       <div class="exercise-header">
-        <div class="exercise-name">${ex.name}</div>
-        <div class="exercise-target">${ex.targetSets} sets × ${ex.targetReps} reps · ${doneSets}/${ex.sets.length} done</div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div class="exercise-name">${ex.name}</div>
+            <div class="exercise-target">${ex.targetSets} sets × ${ex.targetReps} reps · ${doneSets}/${ex.sets.length} done</div>
+          </div>
+          <button onclick="swapExercise(${ei})" style="background:none;border:1px solid var(--border2);color:var(--text3);padding:4px 10px;border-radius:var(--rs);font-size:11px;cursor:pointer;font-family:var(--font);flex-shrink:0;margin-left:8px;">Swap</button>
+        </div>
       </div>
       <div class="sets-header">
         <div>SET</div><div>WEIGHT (lbs)</div><div>REPS</div><div></div>
@@ -493,6 +500,11 @@ function renderWorkout(){
     });
     html+=`<button class="add-set-btn" onclick="addSet(${ei})">+ Add Set</button></div>`;
   });
+  // Add exercise button
+  html+=`<div style="background:var(--bg2);border:1px dashed var(--border2);border-radius:var(--r);padding:14px;margin-bottom:10px;display:flex;align-items:center;gap:10px;">
+    <input type="text" id="new-ex-live" placeholder="Add exercise (e.g. Cable Curl)..." style="flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--rs);color:var(--text);font-family:var(--font);font-size:13px;padding:9px 12px;outline:none;"/>
+    <button onclick="addExerciseLive()" style="background:var(--green-dim);color:var(--green);border:none;padding:9px 14px;border-radius:var(--rs);font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);white-space:nowrap;">+ Add</button>
+  </div>`;
   html+=`<button class="btn-primary" onclick="showSummary()" style="margin-top:4px;">Finish Workout</button>`;
   el.innerHTML=html;
 }
@@ -524,6 +536,34 @@ function addSet(ei){
   const lastSet=ex.sets[ex.sets.length-1];
   ex.sets.push({weight:lastSet?lastSet.weight:'',reps:lastSet?lastSet.reps:ex.targetReps,done:false,prevWeight:'',prevReps:''});
   ex.targetSets=ex.sets.length;
+  renderWorkout();
+}
+
+function addExerciseLive(){
+  const input=document.getElementById('new-ex-live');
+  const name=input?input.value.trim():'';
+  if(!name||!activeWorkout)return;
+  activeWorkout.exercises.push({
+    name,
+    targetSets:3,
+    targetReps:'10',
+    sets:[
+      {weight:'',reps:'10',done:false,prevWeight:'',prevReps:''},
+      {weight:'',reps:'10',done:false,prevWeight:'',prevReps:''},
+      {weight:'',reps:'10',done:false,prevWeight:'',prevReps:''}
+    ]
+  });
+  renderWorkout();
+  // Scroll to new exercise
+  setTimeout(()=>window.scrollTo(0,document.body.scrollHeight),100);
+}
+
+function swapExercise(ei){
+  if(!activeWorkout)return;
+  const currentName=activeWorkout.exercises[ei].name;
+  const newName=prompt(`Replace "${currentName}" with:`, currentName);
+  if(!newName||newName.trim()===currentName)return;
+  activeWorkout.exercises[ei].name=newName.trim();
   renderWorkout();
 }
 
@@ -598,6 +638,7 @@ function showSummary(){
   const totalSets=activeWorkout.exercises.reduce((a,e)=>a+e.sets.filter(s=>s.done).length,0);
   const totalVol=activeWorkout.exercises.reduce((a,e)=>a+e.sets.filter(s=>s.done&&s.weight).reduce((b,s)=>b+(parseFloat(s.weight)||0)*(parseInt(s.reps)||0),0),0);
   const totalEx=activeWorkout.exercises.filter(e=>e.sets.some(s=>s.done)).length;
+  const estCal=activeWorkout.exercises.reduce((a,e)=>a+e.sets.filter(s=>s.done).length,0)*15; // rough estimate
   let html=`<div class="summary-hero">
     <div class="summary-emoji">💪</div>
     <div class="summary-title">${activeWorkout.workoutName}</div>
@@ -608,6 +649,31 @@ function showSummary(){
     <div class="stat-card"><div class="stat-val">${totalSets}</div><div class="stat-label">Sets Done</div></div>
     <div class="stat-card"><div class="stat-val">${totalVol>0?Math.round(totalVol/1000)+'k':totalEx}</div><div class="stat-label">${totalVol>0?'Vol (lbs)':'Exercises'}</div></div>
   </div>
+
+  <!-- APPLE WATCH DATA -->
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:16px;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+      <span style="font-size:16px;">⌚️</span>
+      <div style="font-size:13px;font-weight:600;color:var(--text);">Apple Watch Data</div>
+      <div style="font-size:11px;color:var(--text3);font-family:var(--mono);">optional</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:4px;">
+      <div>
+        <label style="font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:4px;">Calories</label>
+        <input type="number" id="aw-cal" placeholder="450" style="width:100%;background:var(--bg3);border:1px solid var(--accent);border-radius:var(--rs);color:var(--text);font-family:var(--font);font-size:15px;font-weight:600;padding:8px;text-align:center;outline:none;-webkit-appearance:none;"/>
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:4px;">Avg HR</label>
+        <input type="number" id="aw-hr-avg" placeholder="138" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--rs);color:var(--text);font-family:var(--font);font-size:15px;font-weight:600;padding:8px;text-align:center;outline:none;-webkit-appearance:none;"/>
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:4px;">Max HR</label>
+        <input type="number" id="aw-hr-max" placeholder="172" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--rs);color:var(--text);font-family:var(--font);font-size:15px;font-weight:600;padding:8px;text-align:center;outline:none;-webkit-appearance:none;"/>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.5;">Check your Apple Watch workout summary and enter your actual calorie burn — this replaces the estimated calories.</div>
+  </div>
+
   <div style="font-size:13px;font-weight:600;color:var(--text2);font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">Set Summary</div>`;
   activeWorkout.exercises.forEach(ex=>{
     const doneSets=ex.sets.filter(s=>s.done);
@@ -630,6 +696,19 @@ function showSummary(){
 
 function finishWorkout(){
   if(!activeWorkout)return;
+  // Read Apple Watch data from summary fields
+  const awCal=parseInt(document.getElementById('aw-cal')?.value)||0;
+  const awHrAvg=parseInt(document.getElementById('aw-hr-avg')?.value)||0;
+  const awHrMax=parseInt(document.getElementById('aw-hr-max')?.value)||0;
+  // Store workout data
+  const elapsed=Math.floor((Date.now()-workoutStartTime)/1000);
+  activeWorkout.duration=Math.floor(elapsed/60);
+  if(awCal>0){
+    activeWorkout.calories=awCal;
+    activeWorkout.caloriesSource='apple_watch';
+  }
+  if(awHrAvg>0)activeWorkout.hrAvg=awHrAvg;
+  if(awHrMax>0)activeWorkout.hrMax=awHrMax;
   strengthLog.push(activeWorkout);
   persist();
   activeWorkout=null;
