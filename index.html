@@ -582,7 +582,13 @@ function save(){
   scheduleSync();
 }
 
-function dk(d){return d.toISOString().split('T')[0];}
+function dk(d){
+  // Use local date not UTC to avoid timezone issues
+  const yr=d.getFullYear();
+  const mo=String(d.getMonth()+1).padStart(2,'0');
+  const dy=String(d.getDate()).padStart(2,'0');
+  return `${yr}-${mo}-${dy}`;
+}
 function td(){return dk(curD);}
 function gm(){return meals[td()]||[];}
 function gw(){return workouts[td()]||[];}
@@ -1446,7 +1452,7 @@ function exportData(){
     foodLibrary
   };
   const json=JSON.stringify(d);
-  const date=new Date().toISOString().split('T')[0];
+  const date=dk(new Date());
   const filename=`recomp-me-backup-${date}.json`;
 
   // iOS Safari PWA: use share sheet if available (most reliable on iPhone)

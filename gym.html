@@ -332,7 +332,13 @@ const DEFAULT_PLAN = [
   }
 ];
 
-// ── STATE ─────────────────────────────────────────────────
+function localDateStr(){
+  const d=new Date();
+  const yr=d.getFullYear();
+  const mo=String(d.getMonth()+1).padStart(2,'0');
+  const dy=String(d.getDate()).padStart(2,'0');
+  return `${yr}-${mo}-${dy}`;
+}
 let plan = [];
 let strengthLog = []; // [{id, date, workoutId, workoutName, exercises:[{name,sets:[{weight,reps,done}]}]}]
 let activeWorkout = null;
@@ -432,7 +438,7 @@ function startWorkout(dayId){
     id:Date.now().toString(),
     workoutId:dayId,
     workoutName:day.name,
-    date:new Date().toISOString().split('T')[0],
+    date:localDateStr(),
     exercises:day.exercises.map(ex=>{
       const prevEx=prevSession?prevSession.exercises.find(e=>e.name===ex.name):null;
       return {
