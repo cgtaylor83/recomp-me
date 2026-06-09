@@ -713,31 +713,86 @@ function delM(id){const k=td();if(meals[k])meals[k]=meals[k].filter(m=>m.id!==id
 
 // ACTIVITY
 function renderA(){
-  s('a-burn',Math.round(brn(gw())));s('a-week',wkCount());s('a-streak',streak());
-  // Load gym quick stats from localStorage
+  // Calculate burned calories combining AI workouts + gym tracker workouts
+  let gymCalToday = 0;
+  let gymSessionsToday = [];
   try{
-    const latest=localStorage.getItem('gym-latest');
     const gymLog=localStorage.getItem('gym-log');
-    const el=document.getElementById('gym-quick-stats');
-    if(el&&latest){
-      const l=JSON.parse(latest);
-      const totalSets=l.exercises.reduce((a,e)=>a+(e.sets.filter(st=>st.done).length),0);
-      const d=new Date(l.date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});
-      el.innerHTML=`<div style="font-size:11px;color:var(--green);font-family:var(--mono);">Last: ${l.workoutName} · ${d} · ${totalSets} sets</div>`;
-    }
-    if(el&&gymLog){
+    if(gymLog){
       const log=JSON.parse(gymLog);
-      const weekCount=[...new Set(log.filter(l=>{const d=new Date(l.date+'T12:00:00');const now=new Date();return (now-d)<7*24*60*60*1000;}).map(l=>l.date))].length;
-      if(weekCount){
-        const span=document.createElement('div');
-        span.style.cssText='font-size:11px;color:var(--text3);font-family:var(--mono);';
-        span.textContent=weekCount+' workouts this week';
-        el&&el.appendChild(span);
-      }
+      const todayStr=td();
+      gymSessionsToday=log.filter(s=>s.date===todayStr);
+      gymCalToday=gymSessionsToday.reduce((a,s)=>a+(s.calories||0),0);
     }
   }catch(e){}
-  const w=gw(),el=document.getElementById('workout-list');
-  el.innerHTML=w.length?w.map(x=>`<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;"><div style="flex:1;"><div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;"><div class="ctitle">${x.name}</div><div class="badge ${x.type==='strength'?'bb':x.type==='cardio'?'bg':'ba'}">${x.type||'workout'}</div></div>${x.summary?`<div class="csub">${x.summary}</div>`:''}<div class="pills"><div class="pill"><b>${Math.round(x.calories||0)}</b> kcal</div>${x.duration?`<div class="pill"><b>${x.duration}</b> min</div>`:''}<div class="pill"><b>${x.quality||'Logged'}</b></div></div></div><button class="del" onclick="delW(${x.id})">✕</button></div></div>`).join(''):'<div class="empty">No AI workouts logged today</div>';
+
+  const aiCalToday=brn(gw());
+  const totalCalToday=aiCalToday+gymCalToday;
+  s('a-burn',Math.round(totalCalToday));
+  s('a-week',wkCount());
+  s('a-streak',streak());
+
+  // Gym quick stats card
+  try{
+    const gymLog=localStorage.getItem('gym-log');
+    const el=document.getElementById('gym-quick-stats');
+    if(el&&gymLog){
+      const log=JSON.parse(gymLog);
+      const weekCount=[...new Set(log.filter(l=>{const d=new Date(l.date+'T12:00:00');const now=new Date();return(now-d)<7*24*60*60*1000;}).map(l=>l.date))].length;
+      const last=log[log.length-1];
+      let html='';
+      if(last){
+        const totalSets=last.exercises.reduce((a,e)=>a+(e.sets.filter(st=>st.done).length),0);
+        const d=new Date(last.date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});
+        const calStr=last.calories?(last.caloriesSource==='apple_watch'?'⌚ '+last.calories+' cal':last.calories+' cal'):'';
+        html+=`<div style="font-size:11px;color:var(--green);font-family:var(--mono);">Last: ${last.workoutName} · ${d} · ${totalSets} sets${calStr?' · '+calStr:''}</div>`;
+      }
+      if(weekCount) html+=`<div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-top:2px;">${weekCount} workout${weekCount>1?'s':''} this week</div>`;
+      el.innerHTML=html;
+    }
+  }catch(e){}
+
+  // Show gym tracker sessions logged today
+  const gymListEl=document.getElementById('workout-list');
+  let gymHtml='';
+
+  // Today's gym tracker sessions
+  if(gymSessionsToday.length){
+    gymSessionsToday.forEach(s=>{
+      const totalSets=s.exercises.reduce((a,e)=>a+(e.sets.filter(st=>st.done).length),0);
+      const calStr=s.calories?(s.caloriesSource==='apple_watch'?'⌚ '+s.calories+' cal':s.calories+' cal est.'):'';
+      const hrStr=s.hrAvg?` · ❤️ ${s.hrAvg}/${s.hrMax||'?'} bpm`:'';
+      const exList=s.exercises.filter(e=>e.sets.some(st=>st.done)).map(e=>e.name).join(', ');
+      gymHtml+=`<div class="card" style="border-left:3px solid var(--green);">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div style="flex:1;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+              <div class="ctitle">${s.workoutName}</div>
+              <div class="badge bb">strength</div>
+            </div>
+            <div class="csub" style="margin-bottom:6px;">${exList}</div>
+            <div class="pills">
+              ${calStr?`<div class="pill"><b>${calStr}</b></div>`:''}
+              ${s.duration?`<div class="pill"><b>${s.duration}</b> min</div>`:''}
+              <div class="pill"><b>${totalSets}</b> sets</div>
+              ${s.hrAvg?`<div class="pill">❤️ <b>${s.hrAvg}</b> avg bpm</div>`:''}
+            </div>
+          </div>
+          <div style="font-size:10px;color:var(--text3);font-family:var(--mono);">Gym Tracker</div>
+        </div>
+      </div>`;
+    });
+  }
+
+  // Today's AI-logged workouts
+  const aiWorkouts=gw();
+  if(aiWorkouts.length){
+    aiWorkouts.forEach(x=>{
+      gymHtml+=`<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;"><div style="flex:1;"><div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;"><div class="ctitle">${x.name}</div><div class="badge ${x.type==='strength'?'bb':x.type==='cardio'?'bg':'ba'}">${x.type||'workout'}</div></div>${x.summary?`<div class="csub">${x.summary}</div>`:''}<div class="pills"><div class="pill"><b>${Math.round(x.calories||0)}</b> kcal</div>${x.duration?`<div class="pill"><b>${x.duration}</b> min</div>`:''}<div class="pill"><b>${x.quality||'Logged'}</b></div></div></div><button class="del" onclick="delW(${x.id})">✕</button></div></div>`;
+    });
+  }
+
+  gymListEl.innerHTML=gymHtml||'<div class="empty">No workouts today — open the Gym Tracker above or log one below</div>';
 }
 
 async function lookupWorkout(){
